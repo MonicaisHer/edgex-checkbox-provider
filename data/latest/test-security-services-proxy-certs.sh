@@ -70,14 +70,16 @@ echo "Generating public key"
 openssl ec -in $EDGEXFOUNDRY_SNAP_DATA/private.pem -pubout -out public.pem
 PUBLIC_KEY=$(< public.pem)
  
-echo "Setting security-proxy user"
-snap set edgexfoundry env.security-proxy.user=user01,USER_ID,ES256
-echo "Setting security-proxy public key"
-snap set edgexfoundry env.security-proxy.public-key="$PUBLIC_KEY"
+echo "Read the API Gateway token"
+KONG_ADMIN_JWT=`sudo cat /var/snap/edgexfoundry/current/secrets/security-proxy-setup/kong-admin-jwt`
+
+
+echo "Use secrets-config to add a user example with id 1000"
+edgexfoundry.secrets-config proxy adduser --token-type jwt --user example --algorithm ES256 --public_key public.pem --id 1000 --jwt $KONG_ADMIN_JWT
 
 echo "Generating JWT"
 # this command doesn't write errors to stderr. Check the exit code before using the output:
-if ! OUT=$(edgexfoundry.secrets-config proxy jwt --algorithm ES256 --private_key $EDGEXFOUNDRY_SNAP_DATA/private.pem --id USER_ID --expiration=1h)
+if ! OUT=$(edgexfoundry.secrets-config proxy jwt --algorithm ES256 --private_key private.pem --id 1000 --expiration=1h | tee user-jwt.txt)
 then
     print_error_logs
     >&2 echo $OUT
@@ -129,13 +131,7 @@ fi
 
 openssl_generate_certificate server.crt server.key server.csr ca.crt ca.key
 
-TEST_CERT=$(< server.crt)
-TEST_KEY=$(< server.key)
-
-echo "Setting security-proxy certificate"
-snap set edgexfoundry env.security-proxy.tls-certificate="$TEST_CERT"
-echo "Setting security-proxy certificate private key"
-snap set edgexfoundry env.security-proxy.tls-private-key="$TEST_KEY"
+edgexfoundry.secrets-config proxy tls --incert ca.crt --inkey ca.key --admin_api_jwt $KONG_ADMIN_JWT
 
 # the CA certificate needs to be where edgexfoundry.curl can read it
 echo "Copying CA certificate"
