@@ -68,14 +68,15 @@ echo "Generating private key"
 openssl ecparam -genkey -name prime256v1 -noout -out $EDGEXFOUNDRY_SNAP_DATA/private.pem
 echo "Generating public key"
 openssl ec -in $EDGEXFOUNDRY_SNAP_DATA/private.pem -pubout -out public.pem
-PUBLIC_KEY=$(< public.pem)
- 
+
+echo "Enabling app options"
+snap set edgexfoundry app-options=true
+
+echo "Use sanp options to add a user example with username, userid, algorithm (admin, 1, ES256)"
+snap set edgexfoundry apps.secrets-config.proxy.admin.public-key=public.pem
+
 echo "Read the API Gateway token"
 KONG_ADMIN_JWT=`sudo cat /var/snap/edgexfoundry/current/secrets/security-proxy-setup/kong-admin-jwt`
-
-
-echo "Use secrets-config to add a user example with id 1000"
-edgexfoundry.secrets-config proxy adduser --token-type jwt --user example --algorithm ES256 --public_key public.pem --id 1000 --jwt $KONG_ADMIN_JWT
 
 echo "Generating JWT"
 # this command doesn't write errors to stderr. Check the exit code before using the output:
@@ -131,7 +132,9 @@ fi
 
 openssl_generate_certificate server.crt server.key server.csr ca.crt ca.key
 
-edgexfoundry.secrets-config proxy tls --incert ca.crt --inkey ca.key --admin_api_jwt $KONG_ADMIN_JWT
+echo "Generating CA certificate using snap options"
+snap set edgexfoundry apps.secrets-config.proxy.tls.cert=ca.crt
+snap set edgexfoundry apps.secrets-config.proxy.tls.key=ca.key
 
 # the CA certificate needs to be where edgexfoundry.curl can read it
 echo "Copying CA certificate"
